@@ -3,6 +3,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from contextlib import asynccontextmanager
 from core.database import init_db
 from api import desc
+from api.v1 import classify_email_api
 import secrets
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
@@ -25,6 +26,7 @@ app = FastAPI(title="Email Classification API", lifespan=lifespan, docs_url=None
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(desc.router, dependencies=[Depends(basic_auth)])
+app.include_router(classify_email_api.router, dependencies=[Depends(basic_auth)])
 
 # Update the Swagger UI documentation endpoint with basic authentication
 @app.get("/docs", include_in_schema=False)
