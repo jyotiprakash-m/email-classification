@@ -1,6 +1,7 @@
 import pickle
 import os
 import re
+from langsmith import traceable
 
 MODEL_PATH = 'pkl_files/email_dataset_long.pkl'
 
@@ -36,6 +37,7 @@ def preprocess_text_simple(text):
     text = ' '.join(text.split())
     return text
 
+@traceable(name="classify_email")
 def classify_email(email_content: str):
     global classifier, label_encoder
     if classifier is None or label_encoder is None:

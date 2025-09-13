@@ -7,6 +7,12 @@ from api.v1 import classify_email_api
 import secrets
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from dotenv import load_dotenv
+load_dotenv()
+from langsmith import Client
+
+# ✅ Setup LangSmith client (optional, useful if you want to log manually too)
+client = Client()
 
 security = HTTPBasic()
 
