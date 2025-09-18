@@ -22,6 +22,7 @@ Rules:
 - Never use INSERT, UPDATE, DELETE, DROP, ALTER, or CREATE.
 - Query must always begin with SELECT.
 - Do not include explanations or comments, return only SQL.
+- Do NOT wrap the SQL in markdown code blocks (do not use triple backticks or add 'sql' at the start).
 - Always use fully qualified table names (e.g., public."user").
 - If a table name is a reserved word, use double quotes (e.g., "user").
 - Prefer queries with WHERE clauses or ORDER BY for more useful results.
@@ -62,6 +63,8 @@ ENUM Types:
 """
 
 def enforce_select_only(sql: str) -> str:
+    
+    # print(f"Enforcing SELECT only on SQL: {sql}")
     # Remove SQL comments
     sql_no_comments = re.sub(r'(--.*?$|/\\*.*?\\*/)', '', sql, flags=re.MULTILINE | re.DOTALL)
     # Remove markdown code block formatting (triple backticks, optional 'sql') at start and end, even if on their own lines
@@ -121,6 +124,6 @@ def generate_select_query(user_request: str) -> str:
     ])
     sql_query = normalize_content(response.content).strip()
     
-    print(f"Generated SQL: {sql_query}")
+    # print(f"Generated SQL: {sql_query}")
     enforce_query =  enforce_select_only(sql_query)
     return execute_query(enforce_query)
