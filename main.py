@@ -12,6 +12,8 @@ from api.v1.store_vectors_pdf_api import router as pdf_router
 from api.v1.email_classification_graph_api import router as email_graph_router
 from api.v1.reply_graph_api import router as reply_graph_router
 from api.v1.rag_retrieval_api import router as rag_router
+from api.v1.email_replyer_api import router as generic_email_replyer_router
+from api.v1.retreive_data_db import router as db_query_router
 from dotenv import load_dotenv
 load_dotenv()
 from langsmith import Client
@@ -43,6 +45,8 @@ app.include_router(pdf_router, dependencies=[Depends(basic_auth)])
 app.include_router(email_graph_router, dependencies=[Depends(basic_auth)])
 app.include_router(reply_graph_router, dependencies=[Depends(basic_auth)])
 app.include_router(rag_router, dependencies=[Depends(basic_auth)])
+app.include_router(generic_email_replyer_router, dependencies=[Depends(basic_auth)])
+app.include_router(db_query_router, dependencies=[Depends(basic_auth)])
 
 
 # Update the Swagger UI documentation endpoint with basic authentication
