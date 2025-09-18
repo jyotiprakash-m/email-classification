@@ -7,6 +7,11 @@ from api.v1 import classify_email_api
 import secrets
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from api.v1.org_functionality_api import router as org_router
+from api.v1.store_vectors_pdf_api import router as pdf_router
+from api.v1.email_classification_graph_api import router as email_graph_router
+from api.v1.reply_graph_api import router as reply_graph_router
+from api.v1.rag_retrieval_api import router as rag_router
 from dotenv import load_dotenv
 load_dotenv()
 from langsmith import Client
@@ -33,6 +38,12 @@ app = FastAPI(title="Email Classification API", lifespan=lifespan, docs_url=None
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(desc.router, dependencies=[Depends(basic_auth)])
 app.include_router(classify_email_api.router, dependencies=[Depends(basic_auth)])
+app.include_router(org_router, dependencies=[Depends(basic_auth)])
+app.include_router(pdf_router, dependencies=[Depends(basic_auth)])
+app.include_router(email_graph_router, dependencies=[Depends(basic_auth)])
+app.include_router(reply_graph_router, dependencies=[Depends(basic_auth)])
+app.include_router(rag_router, dependencies=[Depends(basic_auth)])
+
 
 # Update the Swagger UI documentation endpoint with basic authentication
 @app.get("/docs", include_in_schema=False)

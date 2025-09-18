@@ -10,7 +10,7 @@ import os
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
 from langchain.chains import RetrievalQA
-from core.config import settings
+from core import settings
 from langchain_core.tools import tool
 from langchain.chat_models import init_chat_model
 from langchain.schema import HumanMessage, SystemMessage
@@ -21,10 +21,10 @@ load_dotenv()
 class State(TypedDict, total=False):
     userId: str
     tone: str
-    emailBody: str
+    email_body: str
     tool_instructions: Optional[str]
     input: Optional[str]
-    finalResponse: Optional[str]
+    final_response: Optional[str]
     tool_outputs: Optional[Any]
 
 
@@ -230,12 +230,12 @@ agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 # 6. Define nodes
 def prepare_input(state: State):
     userId = state.get("userId", "")
-    emailBody = state.get("emailBody", "")
+    email_body = state.get("email_body", "")
     tone = state.get("tone", "professional")
     tool_instructions = state.get("tool_instructions", "")
     state["input"] = (
     f"User ID: {userId}\n"
-    f"Email Body: {emailBody}\n"
+    f"Email Body: {email_body}\n"
     f"Desired Tone: {tone}\n\n"
     f"Tool Instructions: {tool_instructions}\n"
     "Based on the above email, generate a polite and context-aware reply. "
@@ -258,9 +258,9 @@ def final_response(state: State):
     tool_outputs = state.get("tool_outputs")
     # Generate a user-facing final response
     if tool_outputs:
-        state["finalResponse"] = f"Reply generated: {tool_outputs}"
+        state["final_response"] = tool_outputs
     else:
-        state["finalResponse"] = "No reply could be generated."
+        state["final_response"] = "No reply could be generated."
     return state
 
 
@@ -280,10 +280,10 @@ workflow.add_edge("final_response", END)
 graph = workflow.compile()
 
 
-if __name__ == "__main__":
-    initial_state: State = {
-        "input": "Reverse this number 123456789."
-    }
-    result = graph.invoke(initial_state)
-    print("\n=== Final Result ===")
-    print(result)
+# if __name__ == "__main__":
+#     initial_state: State = {
+#         "input": "Reverse this number 123456789."
+#     }
+#     result = graph.invoke(initial_state)
+#     print("\n=== Final Result ===")
+#     print(result)

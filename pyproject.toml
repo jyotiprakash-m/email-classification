@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "bs4>=0.0.2",
     "email-validator>=2.3.0",
     "fastapi>=0.116.1",
     "langchain>=0.3.27",
@@ -15,22 +16,32 @@ dependencies = [
     "langgraph>=0.6.7",
     "langsmith>=0.4.27",
     "load-dotenv>=0.1.0",
+    "markdown>=3.9",
     "msal>=1.33.0",
+    "msoffcrypto-tool>=5.4.2",
     "nest-asyncio>=1.6.0",
+    "networkx>=3.5",
     "ollama>=0.5.3",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.2",
     "psycopg>=3.2.10",
     "psycopg-binary>=3.2.10",
     "psycopg2-binary>=2.9.10",
     "pydantic>=2.11.9",
     "pydantic-settings>=2.10.1",
     "pyngrok>=7.3.0",
+    "pypdf>=6.0.0",
+    "python-docx>=1.2.0",
     "python-multipart>=0.0.20",
+    "python-pptx>=1.0.2",
     "requests>=2.32.5",
     "scikit-learn==1.6.1",
     "sqlalchemy>=2.0.43",
     "sqlalchemy-utils>=0.42.0",
     "sqlmodel>=0.0.24",
+    "unstructured>=0.18.15",
     "uvicorn>=0.35.0",
+    "xlrd>=2.0.2",
 ]
 
 
