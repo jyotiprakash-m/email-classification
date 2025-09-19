@@ -12,7 +12,7 @@ import re
 from bs4 import BeautifulSoup
 from core import settings
 from langchain.chat_models import init_chat_model
-
+from langchain.schema import HumanMessage, SystemMessage
 #  Create LLM
 
 llm = init_chat_model(
@@ -26,7 +26,7 @@ llm = init_chat_model(
 class State(TypedDict, total=False):
     userId: str
     orgId: str
-    offset: Optional[str]
+    offset: Optional[int]
     limit: Optional[int]
     emails: Optional[list]
     
@@ -37,6 +37,8 @@ def fetch_emails(state: State):
 
     # Get Org details
     org_id = state.get("orgId")
+    limit = state.get("limit", 1)
+    offset = state.get("offset", 0)
     org_details = None
     if org_id:
         with Session(engine) as session:
@@ -45,7 +47,7 @@ def fetch_emails(state: State):
             if result:
                 org_read = OrgRead.model_validate(result)
                 org_details = org_read.model_dump()
-                print(f"Fetched Org Details: {org_details}")
+                print(f"Step 1: Fetched Org Details: {org_details}")
     
     # Now we will fetch emails for this org
     if org_details:
@@ -62,57 +64,69 @@ def fetch_emails(state: State):
                 if status == 'OK':
                     status, email_ids = mail.search(None, 'ALL')
                     if status == 'OK' and email_ids[0]:
-                        latest_email_id = email_ids[0].split()[-1]
-                        status, msg_data = mail.fetch(latest_email_id, "(RFC822)")
-                        if status == 'OK' and msg_data and msg_data[0]:
-                            raw_email = msg_data[0][1] if isinstance(msg_data[0], tuple) and len(msg_data[0]) > 1 else None
-                            if isinstance(raw_email, bytes):
-                                msg = email.message_from_bytes(raw_email)
-                                subject = msg['subject']
-                                from_address = msg['from']
-                                date = msg['date']
-                                plain_text_body = ""
-                                html_body_content = ""
-                                if msg.is_multipart():
-                                    for part in msg.walk():
-                                        ctype = part.get_content_type()
-                                        cdispo = part.get_content_disposition()
-                                        if ctype == 'text/plain' and cdispo is None:
-                                            payload = part.get_payload(decode=True)
-                                            if isinstance(payload, bytes):
-                                                plain_text_body = payload.decode(errors='ignore')
-                                                break
-                                        elif ctype == 'text/html' and cdispo is None:
-                                            payload = part.get_payload(decode=True)
-                                            if isinstance(payload, bytes):
-                                                html_body_content = payload.decode(errors='ignore')
-                                else:
-                                    payload = msg.get_payload(decode=True)
-                                    if isinstance(payload, bytes):
-                                        plain_text_body = payload.decode(errors='ignore')
-                                def clean_email_body(body: str) -> str:
-                                    if body is None:
-                                        return ""
-                                    soup = BeautifulSoup(body, "html.parser")
-                                    for script_or_style in soup(["script", "style"]):
-                                        script_or_style.extract()
-                                    for tag in soup.find_all(True):
-                                        # Only process tags with 'attrs' attribute
-                                        if hasattr(tag, "attrs") and "style" in tag.attrs: # type: ignore
-                                            del tag.attrs["style"] # type: ignore
-                                    text = soup.get_text(separator="\n", strip=True)
-                                    text = re.sub(r'\n\s*\n', '\n\n', text).strip()
-                                    return text
-                                final_body = plain_text_body if plain_text_body else clean_email_body(html_body_content)
-                                email_data = {
-                                    "email_id": latest_email_id.decode() if isinstance(latest_email_id, bytes) else str(latest_email_id),
-                                    "subject": subject,
-                                    "from": from_address,
-                                    "date": date,
-                                    "body": final_body,
-                                    "original_body": raw_email.decode(errors='ignore') if isinstance(raw_email, bytes) else ""
-                                }
-                                fetched_emails_data.append(email_data)
+                        all_email_ids = email_ids[0].split()
+                        # Apply offset and limit
+                        offset = state.get("offset")
+                        limit = state.get("limit")
+                        # Ensure offset and limit are integers
+                        offset = int(offset) if offset is not None else 0
+                        limit = int(limit) if limit is not None else 1
+                        # Get the correct slice (latest emails first)
+                        selected_ids = all_email_ids[::-1][offset:offset+limit]
+                        for email_id in selected_ids:
+                            status, msg_data = mail.fetch(email_id, "(RFC822)")
+                            if status == 'OK' and msg_data and msg_data[0]:
+                                raw_email = msg_data[0][1] if isinstance(msg_data[0], tuple) and len(msg_data[0]) > 1 else None
+                                if isinstance(raw_email, bytes):
+                                    msg = email.message_from_bytes(raw_email)
+                                    subject = msg['subject']
+                                    from_address = msg['from']
+                                    date = msg['date']
+                                    plain_text_body = ""
+                                    html_body_content = ""
+                                    if msg.is_multipart():
+                                        for part in msg.walk():
+                                            ctype = part.get_content_type()
+                                            cdispo = part.get_content_disposition()
+                                            if ctype == 'text/plain' and cdispo is None:
+                                                payload = part.get_payload(decode=True)
+                                                if isinstance(payload, bytes):
+                                                    plain_text_body = payload.decode(errors='ignore')
+                                                    break
+                                            elif ctype == 'text/html' and cdispo is None:
+                                                payload = part.get_payload(decode=True)
+                                                if isinstance(payload, bytes):
+                                                    html_body_content = payload.decode(errors='ignore')
+                                    else:
+                                        payload = msg.get_payload(decode=True)
+                                        if isinstance(payload, bytes):
+                                            plain_text_body = payload.decode(errors='ignore')
+                                    def clean_email_body(body: str) -> str:
+                                        """
+                                        Removes HTML tags and inline styles from email body.
+                                        Returns clean plain text.
+                                        """
+                                        if body is None:
+                                            return ""
+                                        soup = BeautifulSoup(body, "html.parser")
+                                        for script_or_style in soup(["script", "style"]):
+                                            script_or_style.extract()
+                                        import bs4
+                                        for tag in soup.find_all(True):
+                                            if isinstance(tag, bs4.element.Tag) and "style" in tag.attrs:
+                                                del tag.attrs["style"]
+                                        text = soup.get_text(separator="\n", strip=True)
+                                        text = re.sub(r'\n\s*\n', '\n\n', text).strip()
+                                        return text
+                                    final_body = plain_text_body if plain_text_body else clean_email_body(html_body_content)
+                                    email_data = {
+                                        "email_id": email_id.decode() if isinstance(email_id, bytes) else str(email_id),
+                                        "subject": subject,
+                                        "from": from_address,
+                                        "date": date,
+                                        "body": final_body,
+                                    }
+                                    fetched_emails_data.append(email_data)
                 mail.logout()
             except Exception as e:
                 print(f"Error fetching email: {e}")
@@ -133,19 +147,20 @@ def custom_model_classification(state: State):
         state["emails"] = [{"classification_report": {"error": "No email body available for classification."}}]
     return state
 
-sentiment_system_prompt = '''
-You are a sentiment analysis assistant. 
-Your job is to analyze the given text and classify its sentiment into one of the following categories:
-- Positive
-- Negative
-- Neutral
+sentiment_system_prompt = """
+You are a sentiment analysis assistant.  
+Classify the sentiment of the given text into one of these categories:  
+- Positive  
+- Negative  
+- Neutral  
 
-Rules:
-1. Focus only on sentiment, not on factual correctness.
-2. If sentiment is mixed, select the dominant emotion.
-3. If the text has no emotional content (e.g., factual statements, instructions), classify as Neutral.
-4. Keep the response concise, output only the category name.
-'''
+Guidelines:  
+1. Focus only on emotional tone, not factual accuracy.  
+2. If multiple sentiments are present, choose the dominant one.  
+3. If the text contains no clear emotion (e.g., instructions, facts, or neutral descriptions), classify as Neutral.  
+4. Respond with only the category name (Positive, Negative, or Neutral). Do not add explanations.  
+"""
+
 
 
 def sentiment_analysis(state: State):
@@ -153,17 +168,19 @@ def sentiment_analysis(state: State):
     if emails and isinstance(emails, list):
         for email_obj in emails:
             email_body = email_obj.get("body", "")
+            email_subject = email_obj.get("subject", "")
             try:
-                if not email_body.strip():
+                if not email_body.strip() and not email_subject.strip():
                     email_obj["sentiment_analysis"] = "Neutral"
                     continue
 
-                # Send system prompt + email body as user content
+                # Combine subject and body for sentiment analysis
+                prompt_text = f"Subject: {email_subject}\nBody: {email_body}"
                 response = llm.invoke([
-                    {"role": "system", "content": sentiment_system_prompt},
-                    {"role": "user", "content": email_body}
+                    SystemMessage(content=sentiment_system_prompt),
+                    HumanMessage(content=prompt_text)
                 ])
-                
+
                 if hasattr(response, 'content'):
                     content = response.content
                     if isinstance(content, str):
