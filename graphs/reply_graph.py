@@ -4,24 +4,18 @@ from langchain.chat_models import init_chat_model
 from langchain_core.tools import tool
 from langchain.agents import create_openai_functions_agent, AgentExecutor
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from pydantic import SecretStr
 from dotenv import load_dotenv
 import os
-from langchain_openai import OpenAIEmbeddings
-from langchain_postgres import PGVector
-from langchain.chains import RetrievalQA
 from services.generate_email_from_db import generate_select_query
 from services.rag_retrieval import retrieve_from_pgvector
 from core import settings
 from langchain_core.tools import tool
 from langchain.chat_models import init_chat_model
-from langchain.schema import HumanMessage, SystemMessage
 import re
 load_dotenv()
 
 # 1. Define state type
 class State(TypedDict, total=False):
-    userId: str
     tone: str
     email_body: str
     email_subject: Optional[str]
@@ -31,7 +25,14 @@ class State(TypedDict, total=False):
     input: Optional[str]
     final_response: Optional[str]
     tool_outputs: Optional[Any]
+    
+# 3. Create LLM
 
+llm = init_chat_model(
+    model="gpt-4o-mini",
+    temperature=0,
+    api_key=settings.OPENAI_API_KEY
+)   
 
 # 2. Define some tools
 @tool
@@ -100,14 +101,6 @@ def generic_email_generator(email_text: str) -> str:
 
 tools = [organization_rag_fetcher, db_query_generator, generic_email_generator]
 
-# 3. Create LLM
-
-llm = init_chat_model(
-    model="gpt-4o-mini",
-    temperature=0,
-    api_key=settings.OPENAI_API_KEY
-)
-
 # 4. Create a default prompt for the agent (must include agent_scratchpad)
 prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a helpful AI assistant that can use tools when needed."),
@@ -117,7 +110,7 @@ prompt = ChatPromptTemplate.from_messages([
 
 # 5. Build agent that knows about the tools
 agent = create_openai_functions_agent(llm, tools, prompt)
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, return_intermediate_steps=True)
 
 
 # 6. Define nodes
@@ -129,31 +122,69 @@ def prepare_input(state: State):
     collection_name = state.get("collection_name", "")
     custom_query_input = state.get("custom_query_input", "")
 
+    # If custom query is provided, bypass everything
     if custom_query_input:
         state["input"] = custom_query_input
         return state
 
-    prompt_lines = [
-        f"Email Body: {email_body}",
-        f"Email Subject: {email_subject}",
-        f"Desired Tone: {tone}"
-    ]
-    if tool_instructions:
-        prompt_lines.append(f"Tool Instructions: {tool_instructions}")
-    if collection_name:
-        prompt_lines.append(f"Collection Name: {collection_name}")
-    prompt_lines.append(
-        "Generate a polite, context-aware reply to the above email. Use tools for database or document retrieval if needed."
-    )
-    state["input"] = "\n".join(prompt_lines)
+    # Build a natural query for the agent
+    query_parts = []
+    if email_subject:
+        query_parts.append(f"Subject: {email_subject}")
+    if email_body:
+        query_parts.append(f"Email: {email_body}")
+    query_parts.append(f"Desired tone: {tone}")
+
+    # Explicitly guide the agent about tool usage
+    if tool_instructions == "rag":
+        query_parts.append(
+            f"Retrieve relevant info from the document collection '{collection_name}' "
+            "and use it to craft the reply."
+        )
+    elif tool_instructions == "db":
+        query_parts.append(
+            "Fetch the necessary data from the database to support the reply."
+        )
+    else:
+        query_parts.append(
+            "If factual information is needed, use the appropriate tool. Otherwise, generate a direct reply."
+        )
+
+    state["input"] = "\n".join(query_parts)
     return state
+
 
 
 def tool_execution(state: State):
-    """Pass state.get('input') to the agent executor and store result."""
-    response = agent_executor.invoke({"input": state.get("input")})
-    state["tool_outputs"] = response.get("output")
+    instruction = state.get("tool_instructions", "")
+    input_text = state.get("input", "")
+    collection_name = state.get("collection_name", "")
+
+    if instruction == "rag":
+        # Call rag tool directly with explicit args
+        result = organization_rag_fetcher.invoke({
+            "query": input_text,
+            "collection_name": collection_name or "hr_documents"
+        })
+        state["tool_outputs"] = result
+
+    elif instruction == "db":
+        result = db_query_generator.invoke({"input": input_text})
+        state["tool_outputs"] = result
+
+    elif instruction == "generic":
+        result = generic_email_generator.invoke({"email_text": input_text})
+        state["tool_outputs"] = result
+
+    else:
+        # fallback: agent decides
+        response = agent_executor.invoke({"input": input_text})
+        state["tool_outputs"] = response.get("output")
+
     return state
+
+
+
 
 
 def final_response(state: State):
@@ -188,12 +219,3 @@ workflow.add_edge("final_response", END)
 
 # 8. Compile graph
 graph = workflow.compile()
-
-
-# if __name__ == "__main__":
-#     initial_state: State = {
-#         "input": "Reverse this number 123456789."
-#     }
-#     result = graph.invoke(initial_state)
-#     print("\n=== Final Result ===")
-#     print(result)
