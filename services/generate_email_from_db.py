@@ -101,7 +101,7 @@ def normalize_content(content) -> str:
         return str(content)
 
 # Query Executor
-def execute_query(sql: str) -> Any:
+def execute_query(sql: str) -> dict:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
@@ -112,17 +112,24 @@ def execute_query(sql: str) -> Any:
                 cursor.execute(sql)
                 if cursor.description:  # If the query returns rows
                     results = cursor.fetchall()
-                    if not results:
-                        return {"message": "Query executed successfully, but no data found.", "data": []}
-                    return results
+                    return {
+                        "data": results,
+                        "message": "Query executed successfully."
+                        if results
+                        else "Query executed successfully, but no data found."
+                    }
                 else:
-                    return {"message": "Query executed successfully, no results to return."}
+                    return {
+                        "data": [],
+                        "message": "Query executed successfully, no results to return."
+                    }
             except Exception as e:
-                return {"error": str(e), "message": "Error executing query."}
+                return {"error": str(e), "data": [], "message": "Error executing query."}
     finally:
         conn.close()
 
-def generate_select_query(user_request: str) -> str:
+
+def generate_select_query(user_request: str) -> dict:
     response = llm.invoke([
         SystemMessage(content=db_system_prompt),
         HumanMessage(content=user_request)

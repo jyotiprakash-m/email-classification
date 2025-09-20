@@ -63,7 +63,7 @@ def organization_rag_fetcher(query: str , collection_name: str = "hr_documents")
     
 
 @tool
-def db_query_generator(input: str) -> str:
+def db_query_generator(input: str) -> Any:
     """
     We will pass either the custom_query_input (if provided) or the input to generate a SQL SELECT query and execute it.
     - Input: Natural language request or question that requires data from the organization's PostgreSQL database (e.g., procurement, orders, approvals, users, etc.).
@@ -74,29 +74,19 @@ def db_query_generator(input: str) -> str:
 
 @tool
 def generic_email_generator(email_text: str) -> str:
-    """Analyze the input email and generate a generic, polite, context-aware reply."""
-    
-    system_prompt = """
-    You are an assistant that generates polite, professional, and context-aware email replies. 
-    Rules:
-    1. Reply in a formal and concise tone.
-    2. Acknowledge the sender’s request or concern.
-    3. Provide a generic but relevant response (no sensitive or fabricated details).
-    4. End with a professional closing.
     """
-    
+    Generate a context-aware reply to the input email (not a full email format).
+    - Input: Raw email text (body, optionally subject).
+    - Output: A concise, relevant reply message (not a complete email with greeting/closing).
+    - Workflow: This function provides the core reply content, which will later be formatted as a professional email in the final_response node.
+    - Note: Do not include greeting, closing, or excessive politeness—focus on the main reply content only.
+    """
     prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("human", f"Email received:\n\n{email_text}\n\nWrite a professional reply:")
+        ("human", f"Email received:\n\n{email_text}\n\nWrite a relevant reply:")
     ])
-
     chain = prompt | llm
     response = chain.invoke({})
-    # Ensure the return value is always a string
-    if isinstance(response.content, str):
-        return response.content
-    else:
-        return str(response.content)
+    return response.content if isinstance(response.content, str) else str(response.content)
 
 
 tools = [organization_rag_fetcher, db_query_generator, generic_email_generator]
@@ -150,10 +140,6 @@ def tool_execution(state: State):
     })
     state["tool_outputs"] = response.get("output")
     return state
-
-
-
-
 
 
 def final_response(state: State):
