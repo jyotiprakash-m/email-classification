@@ -118,16 +118,13 @@ def prepare_input(state: State):
     email_body = state.get("email_body", "")
     email_subject = state.get("email_subject", "")
     tone = state.get("tone", "professional")
-    tool_instructions = state.get("tool_instructions", "")
     collection_name = state.get("collection_name", "")
     custom_query_input = state.get("custom_query_input", "")
 
-    # If custom query is provided, bypass everything
     if custom_query_input:
         state["input"] = custom_query_input
         return state
 
-    # Build a natural query for the agent
     query_parts = []
     if email_subject:
         query_parts.append(f"Subject: {email_subject}")
@@ -135,53 +132,25 @@ def prepare_input(state: State):
         query_parts.append(f"Email: {email_body}")
     query_parts.append(f"Desired tone: {tone}")
 
-    # Explicitly guide the agent about tool usage
-    if tool_instructions == "rag":
+    if collection_name:
         query_parts.append(
-            f"Retrieve relevant info from the document collection '{collection_name}' "
-            "and use it to craft the reply."
+            f"You may use the RAG tool with collection_name=`{collection_name}` if document lookup is required."
         )
-    elif tool_instructions == "db":
-        query_parts.append(
-            "Fetch the necessary data from the database to support the reply."
-        )
-    else:
-        query_parts.append(
-            "If factual information is needed, use the appropriate tool. Otherwise, generate a direct reply."
-        )
+    query_parts.append(
+        "Use the available tools (RAG, DB, or direct reply) to generate the best response."
+    )
 
     state["input"] = "\n".join(query_parts)
     return state
 
-
-
 def tool_execution(state: State):
-    instruction = state.get("tool_instructions", "")
-    input_text = state.get("input", "")
-    collection_name = state.get("collection_name", "")
-
-    if instruction == "rag":
-        # Call rag tool directly with explicit args
-        result = organization_rag_fetcher.invoke({
-            "query": input_text,
-            "collection_name": collection_name or "hr_documents"
-        })
-        state["tool_outputs"] = result
-
-    elif instruction == "db":
-        result = db_query_generator.invoke({"input": input_text})
-        state["tool_outputs"] = result
-
-    elif instruction == "generic":
-        result = generic_email_generator.invoke({"email_text": input_text})
-        state["tool_outputs"] = result
-
-    else:
-        # fallback: agent decides
-        response = agent_executor.invoke({"input": input_text})
-        state["tool_outputs"] = response.get("output")
-
+    response = agent_executor.invoke({
+        "input": state.get("input"),
+        "collection_name": state.get("collection_name")  # available if needed
+    })
+    state["tool_outputs"] = response.get("output")
     return state
+
 
 
 

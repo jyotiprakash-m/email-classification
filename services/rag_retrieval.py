@@ -4,8 +4,22 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
 import os
 
+from services.generate_email_from_db import execute_query
+
 def retrieve_from_pgvector(query: str, collection_name: str, k: int = 3):
-	# Initialize LLM
+	check_sql = f"""
+    SELECT 1 FROM langchain_pg_collection 
+    WHERE name = '{collection_name}'
+    """
+
+	exists = execute_query(check_sql)
+ 
+	data = exists.get("data", [])
+	if not data:
+		return {
+			"results": [],
+			"llm_answer": f"Collection '{collection_name}' does not exist."
+		}
 	# Retrieve results
 	embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 	vector_store = PGVector(

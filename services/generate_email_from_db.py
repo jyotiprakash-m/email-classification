@@ -108,12 +108,17 @@ def execute_query(sql: str) -> Any:
     conn = psycopg2.connect(settings.DATABASE_URL)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(sql)
-            if cursor.description:  # If the query returns rows
-                results = cursor.fetchall()
-                return results
-            else:
-                return {"message": "Query executed successfully, no results to return."}
+            try:
+                cursor.execute(sql)
+                if cursor.description:  # If the query returns rows
+                    results = cursor.fetchall()
+                    if not results:
+                        return {"message": "Query executed successfully, but no data found.", "data": []}
+                    return results
+                else:
+                    return {"message": "Query executed successfully, no results to return."}
+            except Exception as e:
+                return {"error": str(e), "message": "Error executing query."}
     finally:
         conn.close()
 

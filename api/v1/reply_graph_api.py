@@ -9,8 +9,8 @@ router = APIRouter(prefix="/v1/reply-graph", tags=["Reply Graph"])
 @traceable(name="classify_reply_api")
 @router.post("/run")
 async def run_reply_graph_api(
-    email_body: Optional[str] = Form(None),
     email_subject: Optional[str] = Form(None),
+    email_body: Optional[str] = Form(None),
     custom_query_input: Optional[str] = Form(None),
     collection_name: Optional[str] = Form(None),
     tone: Optional[str] = Form("professional"),
